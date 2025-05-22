@@ -370,12 +370,23 @@ class SimpleConnector(KVConnectorBase):
         return hidden_or_intermediate_states, bypass_model_exec, model_input
 
     def close(self):
-        self.producer_data_pipe.close()
-        self.consumer_data_pipe.close()
-        if self.config.kv_connector == "PyNcclConnector":
-            self.producer_signal_pipe.close()
-            self.consumer_signal_pipe.close()
-        elif self.config.kv_connector == "MooncakeConnector":
-            # MooncakePipe reuses data_pipe for signal_pipe, so we only have to
-            # close the data_pipe.
-            pass
+        # print("[Eric]: close function is called (from SimpleConnector)")
+        if self.config.is_kv_producer:
+            self.producer_data_pipe.close()
+            self.producer_buffer.close()
+            if self.config.kv_connector == "PyNcclConnector":
+                self.producer_signal_pipe.close()
+            elif self.config.kv_connector == "MooncakeConnector":
+                # MooncakePipe reuses data_pipe for signal_pipe, so we only have to
+                # close the data_pipe.
+                pass
+        else:
+            self.consumer_data_pipe.close()
+            self.consumer_buffer.close()
+            if self.config.kv_connector == "PyNcclConnector":
+                self.consumer_data_pipe.close()
+                self.consumer_signal_pipe.close()
+            elif self.config.kv_connector == "MooncakeConnector":
+                # MooncakePipe reuses data_pipe for signal_pipe, so we only have to
+                # close the data_pipe.
+                pass

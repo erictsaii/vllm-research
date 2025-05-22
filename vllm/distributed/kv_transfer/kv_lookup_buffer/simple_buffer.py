@@ -226,11 +226,7 @@ class SimpleBuffer(KVLookupBufferBase):
 
     def close(self):
 
-        if hasattr(self, "request_handling_thread"
-                   ) and self.request_handling_thread is not None:
-            self.request_handling_thread.join()
-
+        if hasattr(self, "request_handling_thread") and self.request_handling_thread is not None:
+            pass
         else:
-            # TODO: have a explicit close signal and have a explicit way to
-            # check if it's requester
-            self.signal_pipe.send_tensor(self.end_signal)
+            self.signal_pipe.send_tensor(self.end_signal) # self.end_signal is None
