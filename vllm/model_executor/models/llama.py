@@ -89,6 +89,7 @@ class LlamaMLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
+        # print("LlamaMLP.forward() ")
         x, _ = self.gate_up_proj(x)
         x = self.act_fn(x)
         x, _ = self.down_proj(x)
@@ -200,6 +201,7 @@ class LlamaAttention(nn.Module):
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor:
+        # print("LlamaAttention.forward() ")
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         q, k = self.rotary_emb(positions, q, k)
@@ -270,6 +272,7 @@ class LlamaDecoderLayer(nn.Module):
         hidden_states: torch.Tensor,
         residual: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # print("LlamaDecoderLayer.forward() ")
         # Self Attention
         if residual is None:
             residual = hidden_states
@@ -344,7 +347,9 @@ class LlamaModel(nn.Module):
         positions: torch.Tensor,
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
+        layer_range: Optional[list] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        # print("LlamaModel.forward() ")
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -356,7 +361,18 @@ class LlamaModel(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        for layer in self.layers[self.start_layer:self.end_layer]:
+        start_layer = self.start_layer
+        end_layer = self.end_layer
+
+        if layer_range is not None:
+            start_layer = layer_range[0]
+            end_layer = layer_range[1]
+
+        # print("start layer:", start_layer);
+        # print("end layer:", end_layer);
+        
+        # print("end layer", end_layer)
+        for layer in self.layers[start_layer:end_layer]: # from 0 to 31 (default)
             hidden_states, residual = layer(positions, hidden_states, residual)
 
         if not get_pp_group().is_last_rank:
@@ -536,11 +552,14 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         input_ids: torch.Tensor,
         positions: torch.Tensor,
         intermediate_tensors: Optional[IntermediateTensors] = None,
+        layer_range: Optional[list] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        # print("LlamaForCausalLM.forward() ")
         model_output = self.model(input_ids, positions, intermediate_tensors,
-                                  inputs_embeds)
+                                  inputs_embeds, layer_range)
         return model_output
+    
 
     def compute_logits(
         self,
