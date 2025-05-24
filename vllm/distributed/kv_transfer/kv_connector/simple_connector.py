@@ -157,15 +157,17 @@ class SimpleConnector(KVConnectorBase):
         kv_caches: List[torch.Tensor],
         hidden_or_intermediate_states: Union[torch.Tensor,
                                              IntermediateTensors],
+        send_ratio: float = 1.0,
     ) -> None:
 
         input_tokens_tensor = model_input.input_tokens
         seq_lens = model_input.attn_metadata.seq_lens
         slot_mapping_flat = model_input.attn_metadata.slot_mapping.flatten()
         num_prefill_tokens = model_input.attn_metadata.num_prefill_tokens
-        start_layer = model_executable.model.start_layer
+        # start_layer = model_executable.model.start_layer
         end_layer = model_executable.model.end_layer
-
+        start_layer = int((1-send_ratio) * end_layer)
+       
         model_config = model_executable.model.config
         num_heads = int(model_config.num_key_value_heads / self.tp_size)
         hidden_size = model_config.hidden_size
@@ -211,7 +213,10 @@ class SimpleConnector(KVConnectorBase):
             keys, values = [], []
 
             for layer_id in range(start_layer, end_layer):
-                kv_cache = kv_caches[layer_id - start_layer]
+                kv_cache = kv_caches[layer_id - model_executable.model.start_layer]
+
+                # if layer_id == 0:
+                #     logger.info(f"kv_cache[0] shape before reshape: {kv_cache[0].shape}")
 
                 if self.is_deepseek_mla and self.use_mla_opt:
                     key_cache = kv_cache.reshape(-1, num_heads, head_size)
@@ -220,13 +225,19 @@ class SimpleConnector(KVConnectorBase):
                     key_cache = kv_cache[0].reshape(-1, num_heads, head_size)
                     value_cache = kv_cache[1].reshape(-1, num_heads, head_size)
 
+                # if layer_id == 0:
+                #     logger.info(f"key_cache shape after reshape: {key_cache.shape}")
+
                 current_slot_mapping = slot_mapping_flat[start_pos:end_pos]
 
-                keys.append(key_cache[current_slot_mapping].unsqueeze(0))
+                # key_cache[current_slot_mapping].unsqueeze(0) -> [(1, token數量, 32, 128)] 
+                keys.append(key_cache[current_slot_mapping].unsqueeze(0)) # current_slot_mapping長度會是token數量
                 values.append(value_cache[current_slot_mapping].unsqueeze(0))
 
-            keys = torch.cat(keys, dim=0)
+            keys = torch.cat(keys, dim=0) 
+            # logger.info(f"keys shape: {keys.shape}") # [layer數量, token數量, num_heads, head_size]
             values = torch.cat(values, dim=0)
+            # logger.info(f"values shape: {values.shape}")
 
             self.insert(current_tokens,
                         torch.ones_like(current_tokens,
@@ -238,7 +249,8 @@ class SimpleConnector(KVConnectorBase):
     def recv_kv_caches_and_hidden_states(
         self, model_executable: torch.nn.Module,
         model_input: "ModelInputForGPUWithSamplingMetadata",
-        kv_caches: List[torch.Tensor]
+        kv_caches: List[torch.Tensor],
+        recv_ratio: float = 1.0,
     ) -> Tuple[Union[torch.Tensor, IntermediateTensors], bool,
                "ModelInputForGPUWithSamplingMetadata"]:
 
@@ -284,7 +296,7 @@ class SimpleConnector(KVConnectorBase):
 
             # collecting data for rebuilding the input
             input_tokens_list.append(current_tokens)
-            start_pos_list.append(start_pos)
+            start_pos_list.append(start_pos) # not used
 
             ret = self.select(current_tokens,
                               torch.ones_like(current_tokens, dtype=bool))
@@ -312,8 +324,11 @@ class SimpleConnector(KVConnectorBase):
             end_pos = start_pos + num_computed_tokens
 
             # put received KV caches into paged memory
-            for i in range(model_executable.model.start_layer,
-                           model_executable.model.end_layer):
+            # 要改的話應該是從(1-recv_ratio) * end_layer開始，一直到end_layer
+            end_layer = model_executable.model.end_layer
+            start_layer = int((1 - recv_ratio) * end_layer)
+            
+            for i in range(start_layer, end_layer):
 
                 kv_cache = kv_caches[i - model_executable.model.start_layer]
                 layer = model_executable.model.layers[i]
@@ -336,9 +351,9 @@ class SimpleConnector(KVConnectorBase):
                 else:
                     key_cache, value_cache = kv_cache[0], kv_cache[1]
                     ops.reshape_and_cache_flash(
-                        keys[i - model_executable.model.start_layer].to(
+                        keys[i - model_executable.model.start_layer - start_layer].to(
                             key_cache.device),
-                        values[i - model_executable.model.start_layer].to(
+                        values[i - model_executable.model.start_layer - start_layer].to(
                             value_cache.device),
                         key_cache,
                         value_cache,
