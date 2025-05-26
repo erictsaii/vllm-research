@@ -399,7 +399,6 @@ class SimpleConnector(KVConnectorBase):
             self.consumer_data_pipe.close()
             self.consumer_buffer.close()
             if self.config.kv_connector == "PyNcclConnector":
-                self.consumer_data_pipe.close()
                 self.consumer_signal_pipe.close()
             elif self.config.kv_connector == "MooncakeConnector":
                 # MooncakePipe reuses data_pipe for signal_pipe, so we only have to
