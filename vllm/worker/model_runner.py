@@ -1739,6 +1739,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # we can skip prefilling on tokens that successfully received KV caches
         # NOTE: The receive operation is blocking
         bypass_model_exec = False
+        send_kv_cache_ratio = 1.0
+        layer_range = [0, int(send_kv_cache_ratio * model_executable.model.end_layer)]
+
+        # recv
         if self.need_recv_kv(model_input, kv_caches):
             hidden_or_intermediate_states, bypass_model_exec, model_input = \
                 get_kv_transfer_group().recv_kv_caches_and_hidden_states(
@@ -1747,9 +1751,12 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     # layers.
                     model_executable,
                     model_input,
-                    kv_caches=kv_caches
+                    kv_caches=kv_caches,
+                    recv_ratio = send_kv_cache_ratio
                 )
+        # recv
 
+        # forward
         multi_modal_kwargs = model_input.multi_modal_kwargs or {}
         seqlen_agnostic_kwargs = {
             "finished_requests_ids": model_input.finished_requests_ids,
@@ -1771,6 +1778,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     input_ids=model_input.input_tokens,
                     positions=model_input.input_positions,
                     intermediate_tensors=intermediate_tensors,
+                    layer_range = layer_range,
                     **MultiModalKwargs.as_kwargs(multi_modal_kwargs,
                                                  device=self.device),
                     **seqlen_agnostic_kwargs,
@@ -1780,6 +1788,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):
             model_forward_end.record()
+        # forward
 
         # Sending KV cache in distributed KV cache transfer setting
         # NOTE: the send operation is non-blocking
@@ -1792,6 +1801,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 model_input,
                 kv_caches,
                 hidden_or_intermediate_states,
+                send_kv_cache_ratio
             )
 
         # Compute the logits in the last pipeline stage.
