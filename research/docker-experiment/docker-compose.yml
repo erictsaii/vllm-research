@@ -1,0 +1,31 @@
+services:
+  node1:
+    build:
+      context: ../../          # 以 compose 檔在 research/docker-experiment 為基準往上兩層
+      dockerfile: research/docker-experiment/Dockerfile
+    image: vllm-node:cuda12.4
+    container_name: node1
+    command: tail -f /dev/null
+    tty: true
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  node2:
+    image: vllm-node:cuda12.4
+    container_name: node2
+    command: tail -f /dev/null
+    tty: true
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

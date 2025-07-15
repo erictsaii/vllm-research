@@ -1,0 +1,65 @@
+# Dockerfile for a VLLM development environment with editable install
+
+# 1. Base Image
+# Use the -devel image to include the full CUDA Toolkit (nvcc, headers, etc.)
+# needed for compiling vllm's custom kernels.
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+# 2. Environment Setup
+# Set the frontend to noninteractive to prevent apt-get from asking for user input.
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 3. System Dependencies
+# Update package lists and install essential tools.
+# Added cmake, which is required for the vllm build process.
+RUN apt-get update && apt-get install -y \
+    wget \
+    git \
+    procps \
+    vim \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Install Miniconda
+# Download and install Miniconda for Python environment management.
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+    bash /tmp/miniconda.sh -b -p /opt/conda && \
+    rm /tmp/miniconda.sh
+# Add Conda to the system's PATH.
+ENV PATH /opt/conda/bin:$PATH
+
+# 5. Create Conda Environment
+# Create a dedicated environment named 'vllm_env' with Python 3.12.
+# The echo command helps activate the environment automatically for interactive sessions.
+RUN conda init bash
+
+RUN conda create -n vllm_env python=3.12 -y && \
+    echo "conda activate vllm_env" >> ~/.bashrc
+
+# ==================== Core VLLM Setup ====================
+
+# 6. Prepare Workspace and Clone Repository
+# Set the default working directory for all subsequent commands.
+WORKDIR /app
+
+# Use build arguments to make the repository URL and branch name configurable.
+ARG REPO_URL="https://github.com/erictsaii/vllm-research.git"
+ARG BRANCH_NAME="dev-0.8.4"
+
+# Clone the specified repository into the current directory (/app).
+RUN git clone ${REPO_URL} .
+# Check out the specified branch.
+RUN git checkout ${BRANCH_NAME}
+
+# 7. Perform Editable Install of VLLM
+# Install the VLLM package in "editable" mode. This links the installation
+# to the source code in /app, so code changes are reflected immediately.
+# Using `conda run` is the correct way to execute commands within the environment
+# in a non-interactive Docker RUN instruction.
+RUN conda run -n vllm_env bash -c "pip install --editable ."
+
+# =========================================================
+
+# 8. Default Command
+# Keep the container running in the background so we can connect to it.
+CMD ["tail", "-f", "/dev/null"]
