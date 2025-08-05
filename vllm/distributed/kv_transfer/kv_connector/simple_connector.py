@@ -164,7 +164,7 @@ class SimpleConnector(KVConnectorBase):
         seq_lens = model_input.attn_metadata.seq_lens
         slot_mapping_flat = model_input.attn_metadata.slot_mapping.flatten()
         num_prefill_tokens = model_input.attn_metadata.num_prefill_tokens
-        # start_layer = model_executable.model.start_layer
+        
         end_layer = model_executable.model.end_layer
         start_layer = int((1-send_ratio) * end_layer)
        

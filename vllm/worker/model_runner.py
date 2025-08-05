@@ -1739,13 +1739,18 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # we can skip prefilling on tokens that successfully received KV caches
         # NOTE: The receive operation is blocking
         bypass_model_exec = False
-        send_kv_cache_ratio = 0.5
-        end_layer = 32
+        # if self.vllm_config.kv_transfer_config is not None:
+        #     kv_cache_send_ratio = self.vllm_config.kv_transfer_config.kv_cache_send_ratio
+        # else:
+        #     kv_cache_send_ratio = 0.9
+
+        kv_cache_send_ratio = self.vllm_config.kv_transfer_config.kv_cache_send_ratio
+        
+        end_layer = 16
         forward_layer_range = [0, end_layer] # for prefill instance and decode instance after recv
 
         if self.need_recv_kv(model_input, kv_caches):
-            print("enter need_recv_kv")
-            forward_layer_range = [0, int((1.0-send_kv_cache_ratio) * end_layer)] # for decode instance before recv
+            forward_layer_range = [0, int((1.0-kv_cache_send_ratio) * end_layer)] # for decode instance before recv
 
         # print("execute model")
 
@@ -1786,6 +1791,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         # recv
         if self.need_recv_kv(model_input, kv_caches):
+            start_recv_time = time.perf_counter()
             hidden_or_intermediate_states, bypass_model_exec, model_input = \
                 get_kv_transfer_group().recv_kv_caches_and_hidden_states(
                     # model is used to know which layer the current worker
@@ -1794,8 +1800,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     model_executable,
                     model_input,
                     kv_caches=kv_caches,
-                    recv_ratio=send_kv_cache_ratio
+                    recv_ratio=kv_cache_send_ratio
                 )
+            end_recv_time = time.perf_counter()
+            print(f"recv time: {end_recv_time - start_recv_time:.6f}")
         # recv
 
         # Sending KV cache in distributed KV cache transfer setting
@@ -1810,7 +1818,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 model_input,
                 kv_caches,
                 hidden_or_intermediate_states,
-                send_kv_cache_ratio
+                kv_cache_send_ratio
             )
 
         # Compute the logits in the last pipeline stage.

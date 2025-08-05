@@ -7,17 +7,19 @@ from multiprocessing import Event, Process
 from vllm import LLM, SamplingParams
 from vllm.config import KVTransferConfig
 
-# model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-model_name =  "meta-llama/Llama-2-7b-hf"
+model_name = "meta-llama/Llama-3.2-1B"
+# model_name =  "meta-llama/Llama-2-7b-hf"
 
 prompts = [
-    "America is a",
+    "America is a"* 1500,
     # "America is a",
-    "The capital of France is",
+    # "The capital of France is",
     # "Hi, how are you?",
 ]
 
-MAX_MODEL_LEN = 2048
+KV_CACHE_SEND_RATIO = 0.1
+
+MAX_MODEL_LEN = 5000
 
 def run_prefill(prefill_done):
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -32,6 +34,7 @@ def run_prefill(prefill_done):
         kv_role="kv_producer",
         kv_rank=0,
         kv_parallel_size=2,
+        kv_cache_send_ratio=KV_CACHE_SEND_RATIO
     )
 
     llm = LLM(model=model_name,
@@ -79,6 +82,7 @@ def run_decode(prefill_done):
         kv_role="kv_consumer",
         kv_rank=1,
         kv_parallel_size=2,
+        kv_cache_send_ratio=KV_CACHE_SEND_RATIO
     )
 
     decode_init_start_time = time.time()
@@ -102,7 +106,7 @@ def run_decode(prefill_done):
     for output in outputs:
         prompt = output.prompt
         generated_text = output.outputs[0].text
-        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+        print(f"Generated text: {generated_text!r}")
 
 
     # print(f"Decode duration: {decode_generate_duration:.2f} seconds")

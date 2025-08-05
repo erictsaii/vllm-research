@@ -209,6 +209,10 @@ class SimpleBuffer(KVLookupBufferBase):
         value = self.data_pipe.recv_tensor()
         hidden = self.data_pipe.recv_tensor()
 
+        # print("key shape: ", key.shape)
+        # print("value shape: ", value.shape)
+        # print("hidden shape: ", hidden.shape)
+
         return [input_tokens, roi, key, value, hidden]
 
     def insert(self, input_tokens: torch.Tensor, roi: torch.Tensor,

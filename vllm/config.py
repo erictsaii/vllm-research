@@ -3121,6 +3121,9 @@ class KVTransferConfig(BaseModel):
     # any extra config that the connector may need
     kv_connector_extra_config: dict[str, Any] = {}
 
+    # The transfer ratio of kv cache
+    kv_cache_send_ratio: float = 0.1
+
     def compute_hash(self) -> str:
         """
         WARNING: Whenever a new field is added to this config,
