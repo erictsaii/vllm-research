@@ -11,24 +11,21 @@ model_name = "meta-llama/Llama-3.2-1B"
 # model_name =  "meta-llama/Llama-2-7b-hf"
 
 prompts = [
-    "America is a"* 1500,
+    "America is a"*3000,
     # "America is a",
     # "The capital of France is",
     # "Hi, how are you?",
 ]
 
-KV_CACHE_SEND_RATIO = 0.1
+KV_CACHE_SEND_RATIO = 0.9
 
-MAX_MODEL_LEN = 5000
+MAX_MODEL_LEN = 10000
 
 def run_prefill(prefill_done):
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     sampling_params = SamplingParams(temperature=0, max_tokens=1)
 
-    # ktc = KVTransferConfig.from_cli(
-    #     '{"kv_connector":"PyNcclConnector","kv_role":"kv_producer","kv_rank":0,"kv_parallel_size":2}'
-    # )
     ktc = KVTransferConfig(
         kv_connector="PyNcclConnector",
         kv_role="kv_producer",
@@ -40,15 +37,12 @@ def run_prefill(prefill_done):
     llm = LLM(model=model_name,
               kv_transfer_config=ktc,
               max_model_len=MAX_MODEL_LEN,
-              gpu_memory_utilization=0.95,
+              gpu_memory_utilization=1.0,
               dtype="half")
 
     # prefill_start_time = time.time()
     llm.generate(prompts, sampling_params)
     # prefill_end_time = time.time()
-
-    # prefill_duration = prefill_end_time - prefill_start_time
-    # print(f"Prefill duration: {prefill_duration:.2f} seconds")
 
     # Share the exact time prefill finished
     prefill_done.set()
@@ -74,9 +68,6 @@ def run_decode(prefill_done):
 
     sampling_params = SamplingParams(temperature=0)
 
-    # ktc = KVTransferConfig.from_cli(
-    #     '{"kv_connector":"PyNcclConnector","kv_role":"kv_consumer","kv_rank":1,"kv_parallel_size":2}'
-    # )
     ktc = KVTransferConfig(
         kv_connector="PyNcclConnector",
         kv_role="kv_consumer",
@@ -85,11 +76,10 @@ def run_decode(prefill_done):
         kv_cache_send_ratio=KV_CACHE_SEND_RATIO
     )
 
-    decode_init_start_time = time.time()
     llm = LLM(model=model_name,
               kv_transfer_config=ktc,
               max_model_len=MAX_MODEL_LEN,
-              gpu_memory_utilization=0.95,
+              gpu_memory_utilization=1.0,
               dtype="half")
 
     print("Waiting for prefill node to finish...")
@@ -100,16 +90,10 @@ def run_decode(prefill_done):
     outputs = llm.generate(prompts, sampling_params)
     # decode_end_time = time.time()
 
-    # Calculate durations
-    # decode_generate_duration = decode_end_time - decode_generate_start_time
-
     for output in outputs:
         prompt = output.prompt
         generated_text = output.outputs[0].text
         print(f"Generated text: {generated_text!r}")
-
-
-    # print(f"Decode duration: {decode_generate_duration:.2f} seconds")
     
     # Cleanup KV_TRANSFER
     # from vllm.distributed import parallel_state

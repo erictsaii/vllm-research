@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 from dataclasses import dataclass
 import math
 
@@ -12,8 +13,9 @@ class ModelDims:
 
 @dataclass
 class Profile:
-    # Baseline: measured seconds to transfer K/V cache + hidden state for 9000 tokens
-    seconds_for_9000_tokens: float
+    # Baseline: measured seconds to transfer K/V cache + hidden state for profile_token_num tokens
+    seconds_for_profile_tokens: float
+    profile_token_num: int = 9000
     bytes_per_elem: int = 2
 
 def elements_per_token(layers: int, dims: ModelDims) -> int:
@@ -32,7 +34,7 @@ def predict_time_seconds(token_num: int,
                          dims: ModelDims = ModelDims()) -> float:
     """
     Predict transfer time (seconds) for a given token_num and layers using
-    proportional scaling from the 9000-token baseline at dims.layer_num.
+    proportional scaling from the baseline profile.
     Time ∝ total elements to transfer.
     """
     base_layers = dims.layer_num
@@ -40,8 +42,8 @@ def predict_time_seconds(token_num: int,
     target_elems_per_token = elements_per_token(layers, dims)
 
     # Ratio by total element count
-    ratio = (token_num * target_elems_per_token) / (9000 * base_elems_per_token)
-    return profile.seconds_for_9000_tokens * ratio
+    ratio = (token_num * target_elems_per_token) / (profile.profile_token_num * base_elems_per_token)
+    return profile.seconds_for_profile_tokens * ratio
 
 def solve_layers_for_slo(token_num: int,
                          slo_seconds: float,
@@ -62,34 +64,25 @@ def solve_layers_for_slo(token_num: int,
     denom_per_layer = 2 * H * S  # increase per token per layer for K/V
 
     # From inequality:
-    # slo >= T0 * [ N * (denom_per_layer * L' + hidden) ] / [ 9000 * (denom_per_layer * L0 + hidden) ]
-    # slo / T0 = [ N * (denom_per_layer * L' + hidden) ] / [ 9000 * (denom_per_layer * L0 + hidden) ]
-    # slo / T0 * 9000 * (denom_per_layer * L0 + hidden) = N * (denom_per_layer * L' + hidden)
-    # slo / T0 * 9000 * (denom_per_layer * L0 + hidden) / N = denom_per_layer * L' + hidden
-    # slo / T0 * 9000 * (denom_per_layer * L0 + hidden) / N  - hidden = denom_per_layer * L'
-    # L' = [ slo / T0 * 9000 * (denom_per_layer * L0 + hidden) / N  - hidden ] / denom_per_layer
-
-    # Solve for L'
-    T0 = profile.seconds_for_9000_tokens
+    # slo / T0 * N0 * (denom_per_layer * L0 + hidden) / N = denom_per_layer * L' + hidden
+    T0 = profile.seconds_for_profile_tokens
+    N0 = profile.profile_token_num
     N = token_num
 
-    if N <= 0:
-        raise ValueError("token_num must be positive.")
-
-    bound = (slo_seconds / T0) * 9000 * base_per_tok / N
-    # denom_per_layer * L' + hidden <= bound  ->  L' <= (bound - hidden) / denom_per_layer
+    bound = (slo_seconds / T0) * N0 * base_per_tok / N
     max_L_cont = (bound - hidden) / denom_per_layer
     max_L_int = math.floor(max_L_cont)
 
     # Clamp to [1, base_layers]
+    # max_L_int -= 1 # empirically
     L_prime = max(1, min(base_layers, max_L_int))
 
     # Check feasibility at L_prime
     pred_time = predict_time_seconds(token_num, L_prime, profile, dims)
     feasible = pred_time <= slo_seconds
 
-    # Remaining transfer proportion relative to the original design at base_layers
-    remaining_ratio = elements_per_token(L_prime, dims) / elements_per_token(base_layers, dims)
+    # send kv cache ratio
+    remaining_ratio = L_prime / base_layers
 
     return {
         "layer_num_prime": L_prime,
@@ -98,20 +91,24 @@ def solve_layers_for_slo(token_num: int,
         "send_kv_cache_ratio": remaining_ratio,
     }
 
-
-
 if __name__ == "__main__":
-    # --- profiling ---
-    profile = Profile(seconds_for_9000_tokens=1.2)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--profile-result", type=float, required=True)
+    parser.add_argument("--profile-token-num", type=int, default=8500)
+
+    args = parser.parse_args()
+
+    profile = Profile(seconds_for_profile_tokens=args.profile_result,
+                      profile_token_num=args.profile_token_num)
 
     dims = ModelDims(layer_num=16, num_heads=8, head_size=64, hidden_size=2048)
 
     # --- predict time for arbitrary tokens with current layers ---
-    token_num = 3000
-    t_pred = predict_time_seconds(token_num, layers=dims.layer_num, profile=profile, dims=dims)
-    print(f"[Predict] {token_num=}, layers={dims.layer_num} -> time ≈ {t_pred:.4f}s")
+    token_num = 8500
+    # t_pred = predict_time_seconds(token_num, layers=dims.layer_num, profile=profile, dims=dims)
+    # print(f"[Predict] {token_num=}, layers={dims.layer_num} -> time ≈ {t_pred:.4f}s")
 
     # --- given an SLO, compute required layers and remaining ratio ---
-    slo = 0.2  # seconds
+    slo = 10 # seconds
     result = solve_layers_for_slo(token_num=token_num, slo_seconds=slo, profile=profile, dims=dims)
     print("[SLO Plan]", result)

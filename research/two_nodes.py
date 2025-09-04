@@ -13,12 +13,13 @@ from vllm import LLM, SamplingParams
 from vllm.config import KVTransferConfig
 import torch.distributed as dist
 
-KV_CACHE_SEND_RATIO = 0.9
+# KV_CACHE_SEND_RATIO = 1
 
 PROMPTS = [
     # "Hello, my name is",
     # "Hi, your name is",
-    "Tell me a very long story"*750,
+    # "Tell me a very long story"*750,
+    "America is"*4250,
 ]
 
 def run_prefill(args):
@@ -35,7 +36,7 @@ def run_prefill(args):
         kv_parallel_size=2,
         kv_ip=args.ip,  # IP address of the prefill machine
         kv_port=args.port,
-        kv_cache_send_ratio=KV_CACHE_SEND_RATIO
+        kv_cache_send_ratio=args.kv_cache_send_ratio
     )
 
     # Initialize the LLM
@@ -48,9 +49,9 @@ def run_prefill(args):
     )
 
     print("Prefill task is starting...")
-    llm.start_profile()
+    # llm.start_profile()
     llm.generate(PROMPTS, sampling_params)
-    llm.stop_profile()
+    # llm.stop_profile()
     print("Prefill task is finished.")
 
     # Keep the prefill node running
@@ -74,7 +75,7 @@ def run_decode(args):
         kv_parallel_size=2,
         kv_ip=args.ip,  # IP address of the prefill machine
         kv_port=args.port,
-        kv_cache_send_ratio=KV_CACHE_SEND_RATIO
+        kv_cache_send_ratio=args.kv_cache_send_ratio
     )
 
     # Initialize the LLM
@@ -87,9 +88,9 @@ def run_decode(args):
     )
 
     print("Decode node is starting...")
-    llm.start_profile()
+    # llm.start_profile()
     outputs = llm.generate(PROMPTS, sampling_params)
-    llm.stop_profile()
+    # llm.stop_profile()
     print("Decode task is completed...")
 
     # Print results
@@ -105,7 +106,7 @@ def run_decode(args):
 
     from vllm.distributed import parallel_state
     if getattr(parallel_state, "_KV_TRANSFER", None) is not None:
-        print("[test.py] Closing _KV_TRANSFER agent (decode).")
+        print("Closing _KV_TRANSFER agent (decode).")
         parallel_state._KV_TRANSFER.close()
     dist.destroy_process_group()
     
@@ -122,10 +123,12 @@ def main():
                       help="IP address for KV transfer (use producer's IP)")
     parser.add_argument("--port", type=int, default=14579,
                       help="Port for KV transfer")
-    parser.add_argument("--max-model-len", type=int, default=5000,
+    parser.add_argument("--max-model-len", type=int, default=10000,
                       help="Maximum model length")
-    parser.add_argument("--gpu-memory-utilization", type=float, default=0.99,
+    parser.add_argument("--gpu-memory-utilization", type=float, default=1.0,
                       help="GPU memory utilization")
+    parser.add_argument("--kv-cache-send-ratio", type=float, default=1.0,
+                      help="KV cache send ratio")
 
     args = parser.parse_args()
 
