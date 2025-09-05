@@ -13,14 +13,6 @@ from vllm import LLM, SamplingParams
 from vllm.config import KVTransferConfig
 import torch.distributed as dist
 
-# KV_CACHE_SEND_RATIO = 1
-
-PROMPTS = [
-    # "Hello, my name is",
-    # "Hi, your name is",
-    # "Tell me a very long story"*750,
-    "America is"*4250,
-]
 
 def run_prefill(args):
     # Set the GPU to use
@@ -50,6 +42,9 @@ def run_prefill(args):
 
     print("Prefill task is starting...")
     # llm.start_profile()
+    PROMPTS = [
+        "America is"*int(args.token_num/2),
+    ]
     llm.generate(PROMPTS, sampling_params)
     # llm.stop_profile()
     print("Prefill task is finished.")
@@ -89,6 +84,9 @@ def run_decode(args):
 
     print("Decode node is starting...")
     # llm.start_profile()
+    PROMPTS = [
+        "America is"*int(args.token_num/2),
+    ]
     outputs = llm.generate(PROMPTS, sampling_params)
     # llm.stop_profile()
     print("Decode task is completed...")
@@ -129,6 +127,8 @@ def main():
                       help="GPU memory utilization")
     parser.add_argument("--kv-cache-send-ratio", type=float, default=1.0,
                       help="KV cache send ratio")
+    parser.add_argument("--token-num", type=int, default=8500,
+                      help="Number of tokens")
 
     args = parser.parse_args()
 
