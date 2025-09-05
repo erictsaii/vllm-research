@@ -1,56 +1,136 @@
 #!/usr/bin/env python3
-import os
-import re
 import sys
-import subprocess
+import argparse
+import logging
+
 from dynamic_adjustment import *
 from utils import *
+
+# ===== Defaults (same as your snippet) =====
+PYTHON_BIN = "/home/erictsai/miniconda3/envs/vllm-research/bin/python"
+SCRIPT_NAME = "two_nodes.py"
 
 DECODE_LOG_FILE_NAME = "decode.log"
 PROFILE_TOKEN_NUM = 8500
 INPUT_TOKEN_NUM = 8500
 SLO = 8.5
 
-def main():
-    # Profile run
-    cmd = [
-        "/home/erictsai/miniconda3/envs/vllm-research/bin/python", "two_nodes.py",
-        "--mode", "decode",
-        "--ip", "10.121.187.102",
-        "--kv-cache-send-ratio", "1.0",
-        "--token-num", str(PROFILE_TOKEN_NUM),
-    ]
-    rc = run_cmd(cmd, DECODE_LOG_FILE_NAME)
+MODE = "decode"
+IP = "10.121.187.102"
+KV_RATIO_FOR_PROFILE = 1.0
 
-    # Extract profile recv time
-    recv_time = extract_recv_time(DECODE_LOG_FILE_NAME)
-    if recv_time is None:
-        print("ERROR: No 'kv cache recv time' found", file=sys.stderr)
-        return
+# Model dims (same as your snippet)
+DIMS = ModelDims(layer_num=16, num_heads=8, head_size=64, hidden_size=2048)
+
+
+def run_two_nodes(python_bin, script_name, mode, ip, kv_ratio, token_num, log_file):
+    """Thin wrapper to execute two_nodes.py with given args."""
+    cmd = [
+        python_bin, script_name,
+        "--mode", mode,
+        "--ip", ip,
+        "--kv-cache-send-ratio", str(kv_ratio),
+        "--token-num", str(token_num),
+    ]
+    logging.debug("Command: %s", " ".join(cmd))
+    return run_cmd(cmd, log_file)
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Decode profiling -> SLO planning -> Final decode")
+    p.add_argument("--ip", default=IP)
+    p.add_argument("--mode", default=MODE, help="Run mode for two_nodes.py (default: decode)")
+    p.add_argument("--profile-token-num", type=int, default=PROFILE_TOKEN_NUM)
+    p.add_argument("--input-token-num", type=int, default=INPUT_TOKEN_NUM)
+    p.add_argument("--slo", type=float, default=SLO)
+    p.add_argument("--kv-ratio-for-profile", type=float, default=KV_RATIO_FOR_PROFILE)
+    p.add_argument("--python-bin", default=PYTHON_BIN)
+    p.add_argument("--script", default=SCRIPT_NAME)
+    p.add_argument("--decode-log", default=DECODE_LOG_FILE_NAME)
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("-v", "--verbose", action="store_true", help="Show more detailed logs")
+    g.add_argument("-q", "--quiet", action="store_true", help="Show fewer logs")
+    return p.parse_args()
+
+
+def setup_logging(verbose: bool, quiet: bool):
+    if verbose:
+        level = logging.DEBUG
+    elif quiet:
+        level = logging.WARNING
     else:
-        print(f"Profile recv time: {recv_time}") 
+        level = logging.INFO
+    logging.basicConfig(level=level, format="%(levelname)s | %(message)s")
 
-    # Solve for SLO
-    profile = Profile(seconds_for_profile_tokens=recv_time, profile_token_num=PROFILE_TOKEN_NUM)
-    dims = ModelDims(layer_num=16, num_heads=8, head_size=64, hidden_size=2048)
 
-    result = solve_layers_for_slo(token_num=INPUT_TOKEN_NUM, slo_seconds=SLO, profile=profile, dims=dims)
-    print("SLO Plan:", result)
+def main():
+    args = parse_args()
+    setup_logging(args.verbose, args.quiet)
 
-    # Run inference with the adjusted kv_cache_send_ratio
-    cmd = [
-        "/home/erictsai/miniconda3/envs/vllm-research/bin/python", "two_nodes.py",
-        "--mode", "decode",
-        "--ip", "10.121.187.102",
-        "--kv-cache-send-ratio", str(result['send_kv_cache_ratio']),
-        "--token-num", str(INPUT_TOKEN_NUM),
-    ]
-    rc = run_cmd(cmd, DECODE_LOG_FILE_NAME)
+    # ===== Stage 1: Profiling run =====
+    logging.info("Stage 1/4: Running profiling (tokens=%d, kv_ratio=%.2f) ...",
+                 args.profile_token_num, args.kv_ratio_for_profile)
+    rc = run_two_nodes(
+        python_bin=args.python_bin,
+        script_name=args.script,
+        mode=args.mode,
+        ip=args.ip,
+        kv_ratio=args.kv_ratio_for_profile,
+        token_num=args.profile_token_num,
+        log_file=args.decode_log,
+    )
+    if rc != 0:
+        logging.error("Profiling failed (rc=%d). See log: %s", rc, args.decode_log)
+        sys.exit(rc)
+    logging.info("Profiling completed.")
 
-    # Extract real recv time
-    recv_time = extract_recv_time(DECODE_LOG_FILE_NAME)
-    print(f"SLO: {SLO}")
-    print(f"Real recv time: {recv_time}")
+    # ===== Stage 2: Extract profile recv time =====
+    logging.info("Stage 2/4: Extracting profile recv time from %s ...", args.decode_log)
+    recv_time = extract_recv_time(args.decode_log)
+    if recv_time is None:
+        logging.error("No 'kv cache recv time' found. Cannot continue.")
+        sys.exit(1)
+    logging.info("Profile recv time = %.6f s", recv_time)
+
+    # ===== Stage 3: Solve SLO plan =====
+    logging.info("Stage 3/4: Solving SLO plan (SLO=%.3fs, tokens=%d) ...",
+                 args.slo, args.input_token_num)
+    profile = Profile(seconds_for_profile_tokens=recv_time, profile_token_num=args.profile_token_num)
+    result = solve_layers_for_slo(
+        token_num=args.input_token_num,
+        slo_seconds=args.slo,
+        profile=profile,
+        dims=DIMS,
+    )
+    if not isinstance(result, dict) or "send_kv_cache_ratio" not in result:
+        logging.error("Unexpected SLO result: %r", result)
+        sys.exit(1)
+    kv_ratio = float(result["send_kv_cache_ratio"])
+    logging.info("SLO plan: send_kv_cache_ratio=%.6f", kv_ratio)
+
+
+    # ===== Stage 4: Final run with adjusted kv_ratio =====
+    logging.info("Stage 4/4: Running final job with adjusted kv_ratio (tokens=%d) ...",
+                 args.input_token_num)
+    rc = run_two_nodes(
+        python_bin=args.python_bin,
+        script_name=args.script,
+        mode=args.mode,
+        ip=args.ip,
+        kv_ratio=kv_ratio,
+        token_num=args.input_token_num,
+        log_file=args.decode_log,
+    )
+    if rc != 0:
+        logging.error("Final run failed (rc=%d). See log: %s", rc, args.decode_log)
+        sys.exit(rc)
+
+    # Report final measured recv time
+    final_recv_time = extract_recv_time(args.decode_log)
+    logging.info("SLO target: %.3f s", args.slo)
+    logging.info("Final measured recv time: %s", "N/A" if final_recv_time is None else f"{final_recv_time:.6f} s")
+    logging.info("Predicted recv time: %.6f s", result.get("pred_time_seconds_at_L_prime", float('nan')))
+    logging.info("All stages completed successfully.")
 
 
 if __name__ == "__main__":
