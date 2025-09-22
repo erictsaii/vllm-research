@@ -311,6 +311,11 @@ class SimpleConnector(KVConnectorBase):
             values: torch.Tensor = ret[3]
             hidden: torch.Tensor = ret[4]
 
+            # print("roi:", roi.shape, roi.dtype)
+            # print("keys:", keys.shape, keys.dtype)
+            # print("values:", values.shape, values.dtype)
+            # print("hidden:", hidden.shape, hidden.dtype)
+
             num_computed_tokens = roi.shape[0]
             num_computed_tokens_list.append(num_computed_tokens)
 
@@ -330,7 +335,8 @@ class SimpleConnector(KVConnectorBase):
             
             for i in range(start_layer, end_layer):
 
-                kv_cache = kv_caches[i - model_executable.model.start_layer]
+                # kv_cache = kv_caches[i - model_executable.model.start_layer]
+                kv_cache = kv_caches[i]
                 layer = model_executable.model.layers[i]
 
                 if self.is_deepseek_mla and self.use_mla_opt:
@@ -381,6 +387,10 @@ class SimpleConnector(KVConnectorBase):
                 "states, skip model forwarding.", torch.distributed.get_rank())
             hidden_or_intermediate_states = torch.cat(
                 hidden_or_intermediate_states_for_one_req, dim=0)
+
+        print("waiting for all streams to finish")
+        torch.cuda.synchronize()
+        print("all streams finished")
 
         return hidden_or_intermediate_states, bypass_model_exec, model_input
 

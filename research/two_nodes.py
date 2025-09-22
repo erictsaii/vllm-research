@@ -50,7 +50,7 @@ def run_prefill(args):
     print("Prefill task is finished.")
 
     # Keep the prefill node running
-    time.sleep(5)
+    time.sleep(6)
    
     dist.destroy_process_group()
 
@@ -100,7 +100,7 @@ def run_decode(args):
 
 
     # print("Waiting briefly for signal propagation...")
-    time.sleep(5)
+    time.sleep(6)
 
     from vllm.distributed import parallel_state
     if getattr(parallel_state, "_KV_TRANSFER", None) is not None:

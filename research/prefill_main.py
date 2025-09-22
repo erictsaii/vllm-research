@@ -15,7 +15,7 @@ DECODE_LOG_FILE_NAME = "decode.log"
 
 PROFILE_TOKEN_NUM = 8500
 INPUT_TOKEN_NUM = 8500
-SLO = 8.5
+SLO = 2
 
 MODE = "prefill"
 IP = "10.121.187.102"
@@ -74,7 +74,7 @@ def main():
     setup_logging(args.verbose, args.quiet)
 
     # ===== Stage 1: Profiling =====
-    logging.info("Stage 1/3: Running profiling (tokens=%d, kv_ratio=%.2f) ...",
+    logging.info("Stage 1/4: Running profiling (tokens=%d, kv_ratio=%.2f) ...",
                  args.profile_token_num, args.kv_ratio_for_profile)
     rc = run_two_nodes(
         python_bin=args.python_bin,
@@ -97,6 +97,8 @@ def main():
         logging.error("No 'kv cache recv time' found. Cannot continue.")
         sys.exit(1)
     logging.info("Profile recv time = %.6f s", recv_time)
+
+    # recv_time = 13.3
 
     # ===== Stage 3: Solve SLO plan =====
     logging.info("Stage 3/4: Solving SLO plan (SLO=%.3fs, tokens=%d) ...",

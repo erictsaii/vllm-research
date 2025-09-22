@@ -6,20 +6,20 @@ import logging
 from dynamic_adjustment import *
 from utils import *
 
-# ===== Defaults (same as your snippet) =====
+# ===== Defaults =====
 PYTHON_BIN = "/home/erictsai/miniconda3/envs/vllm-research/bin/python"
 SCRIPT_NAME = "two_nodes.py"
 
 DECODE_LOG_FILE_NAME = "decode.log"
 PROFILE_TOKEN_NUM = 8500
 INPUT_TOKEN_NUM = 8500
-SLO = 8.5
+SLO = 2
 
 MODE = "decode"
 IP = "10.121.187.102"
 KV_RATIO_FOR_PROFILE = 1.0
 
-# Model dims (same as your snippet)
+# Model dims
 DIMS = ModelDims(layer_num=16, num_heads=8, head_size=64, hidden_size=2048)
 
 
@@ -91,6 +91,8 @@ def main():
         logging.error("No 'kv cache recv time' found. Cannot continue.")
         sys.exit(1)
     logging.info("Profile recv time = %.6f s", recv_time)
+
+    # recv_time= 13.3
 
     # ===== Stage 3: Solve SLO plan =====
     logging.info("Stage 3/4: Solving SLO plan (SLO=%.3fs, tokens=%d) ...",

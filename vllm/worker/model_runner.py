@@ -1745,14 +1745,20 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         #     kv_cache_send_ratio = 0.9
 
         kv_cache_send_ratio = self.vllm_config.kv_transfer_config.kv_cache_send_ratio
-        
+
         end_layer = 16
-        forward_layer_range = [0, end_layer] # for prefill instance and decode instance after recv
+        forward_layer_range = [
+            0, end_layer
+        ]  # for prefill instance and decode instance after recv
 
         if self.need_recv_kv(model_input, kv_caches):
-            forward_layer_range = [0, int((1.0-kv_cache_send_ratio) * end_layer)] # for decode instance before recv
+            forward_layer_range = [
+                0, int((1.0 - kv_cache_send_ratio) * end_layer)
+            ]  # for decode instance before recv
 
         # print("execute model")
+
+
 
         # forward
         multi_modal_kwargs = model_input.multi_modal_kwargs or {}
@@ -1769,7 +1775,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_end = torch.cuda.Event(enable_timing=True)
             model_forward_start.record()
 
-        if not bypass_model_exec:
+        if not bypass_model_exec and forward_layer_range[1] > 0:
+            start_forward_time = time.perf_counter()
             with set_forward_context(model_input.attn_metadata,
                                      self.vllm_config, virtual_engine):
                 # print(f"forward_layer_range: {forward_layer_range}")
@@ -1777,11 +1784,26 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     input_ids=model_input.input_tokens,
                     positions=model_input.input_positions,
                     intermediate_tensors=intermediate_tensors,
-                    layer_range = forward_layer_range,
+                    layer_range=forward_layer_range,
                     **MultiModalKwargs.as_kwargs(multi_modal_kwargs,
                                                  device=self.device),
                     **seqlen_agnostic_kwargs,
                     **model_kwargs,
+                )
+            torch.cuda.synchronize()
+            end_forward_time = time.perf_counter()
+
+            if self.need_recv_kv(model_input,
+                                 kv_caches):  # means it's a decode instance
+                print(
+                    f"forward time: {end_forward_time - start_forward_time:.2f}"
+                )
+                print("sleep for simulate the decode GPU is slower...")
+                time.sleep(4.0 * (end_forward_time - start_forward_time))
+            if self.need_send_kv(model_input,
+                                 kv_caches):  # means it's a prefill instance
+                print(
+                    f"forward time: {end_forward_time - start_forward_time:.2f}"
                 )
 
         if (self.observability_config is not None
@@ -1791,6 +1813,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         # recv
         if self.need_recv_kv(model_input, kv_caches):
+            # print("sleep for debugging...")
+            # time.sleep(3)
+
             start_recv_time = time.perf_counter()
             hidden_or_intermediate_states, bypass_model_exec, model_input = \
                 get_kv_transfer_group().recv_kv_caches_and_hidden_states(
@@ -1802,14 +1827,16 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     kv_caches=kv_caches,
                     recv_ratio=kv_cache_send_ratio
                 )
+            bypass_model_exec = False
             end_recv_time = time.perf_counter()
             print(f"recv time: {end_recv_time - start_recv_time:.6f}")
+            # logger.info(f"kv cache recv time: {end_recv_time - start_recv_time:.6f}")
         # recv
 
         # Sending KV cache in distributed KV cache transfer setting
         # NOTE: the send operation is non-blocking
         if self.need_send_kv(model_input, kv_caches):
-            print("enter need_send_kv")
+            # print("enter need_send_kv")
             get_kv_transfer_group().send_kv_caches_and_hidden_states(
                 # model_executable is used to know which layer the current
                 # worker is working on, so that we can send KV for only those
@@ -1818,8 +1845,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 model_input,
                 kv_caches,
                 hidden_or_intermediate_states,
-                kv_cache_send_ratio
-            )
+                kv_cache_send_ratio)
 
         # Compute the logits in the last pipeline stage.
         if not get_pp_group().is_last_rank:
