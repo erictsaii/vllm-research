@@ -204,8 +204,8 @@ def is_valid_sequence(
     prompt_len: int,
     output_len: int,
     min_len: int = 4,
-    max_prompt_len: int = 1024,
-    max_total_len: int = 2048,
+    max_prompt_len: int = 128 * 1024,
+    max_total_len: int = 128 * 1024 + 8192,
     skip_min_output_len_check: bool = False,
 ) -> bool:
     """

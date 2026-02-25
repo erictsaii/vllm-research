@@ -3124,6 +3124,9 @@ class KVTransferConfig(BaseModel):
     # The transfer ratio of kv cache
     kv_cache_send_ratio: float = 0.1
 
+    # The threshold of input seq len to start kv cache transfer
+    kv_isl_threshold: int = None
+
     def compute_hash(self) -> str:
         """
         WARNING: Whenever a new field is added to this config,

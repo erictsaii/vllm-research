@@ -6,9 +6,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 MAX_MODEL_LEN = 2048
 
 prompts = [
-    # "America is a",
+    "America is a",
     # "The capital of France is",
-    "Hi, how are you?",
+    # "Hi, how are you?",
 ]
 
 # model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
