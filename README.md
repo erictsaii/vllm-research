@@ -31,7 +31,7 @@ Proxy route:
 ### 1. Pull image and clone repo
 
 ```bash
-docker pull erictsai90/myvllm:5090
+docker pull docker.io/erictsai90/myvllm:5090
 git clone https://github.com/erictsaii/vllm-research.git ~/vllm-research
 cd ~/vllm-research
 ```
@@ -60,9 +60,8 @@ docker run --rm -it \
 docker run --rm -it \
   --name vllm-decode \
   --network vllm-pd-net \
-  --gpus '"device=1"' \
+  --device nvidia.com/gpu=1 \
   --ipc=host \
-  --shm-size=16g \
   -p 8200:8200 \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   -v ~/vllm-research:/workspace/vllm \
@@ -77,9 +76,8 @@ docker run --rm -it \
 docker run --rm -it \
   --name vllm-prefill \
   --network vllm-pd-net \
-  --gpus '"device=0"' \
+  --device nvidia.com/gpu=0 \
   --ipc=host \
-  --shm-size=16g \
   --cap-add NET_ADMIN \
   -p 8100:8100 \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
