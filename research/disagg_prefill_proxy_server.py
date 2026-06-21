@@ -40,12 +40,12 @@ async def handle_request():
 
         # fire-and-forget prefill
         asyncio.create_task(
-            forward_request('http://localhost:8100/v1/completions', prefill_request).__anext__()  # 啟動 generator
+            forward_request('http://vllm-prefill:8100/v1/completions', prefill_request).__anext__()  # 啟動 generator
         )
 
         # decode
         generator = forward_request(
-            'http://10.121.187.103:8200/v1/completions',
+            'http://vllm-decode:8200/v1/completions',
             original_request_data
         )
         response = await make_response(generator)
@@ -62,4 +62,4 @@ async def handle_request():
 
 
 if __name__ == '__main__':
-    app.run(port=8000)
+    app.run(host="0.0.0.0", port=8000)

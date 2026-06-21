@@ -1794,8 +1794,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             end_forward_time = time.perf_counter()
 
             if self.need_recv_kv(model_input, kv_caches):  # means it's a decode instance
-                X = 3.0
-                X = X / 2.0
+                X = 5.0
+                
                 print(
                     f"forward time: {end_forward_time - start_forward_time:.3f}"
                 )

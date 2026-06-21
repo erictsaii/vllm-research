@@ -1,7 +1,7 @@
 from vllm import LLM, SamplingParams
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 MAX_MODEL_LEN = 2048
 
@@ -12,7 +12,10 @@ prompts = [
 ]
 
 # model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-model_name =  "meta-llama/Llama-2-7b-hf"
+# model_name =  "meta-llama/Llama-2-7b-hf"
+# model_name = "meta-llama/Llama-3.2-1B"
+
+model_name =  "meta-llama/Llama-3.1-8B-Instruct"
 
 
 sampling_params = SamplingParams(temperature=0.6)

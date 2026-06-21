@@ -1,8 +1,11 @@
 #!/bin/bash 
 
 # model="meta-llama/Llama-3.2-1B-Instruct"
-model="meta-llama/Llama-2-7b-hf"
-num_prompts=10
+# model="meta-llama/Llama-2-7b-hf"
+model="meta-llama/Llama-3.1-8B-Instruct"
+
+
+num_prompts=30
 qps=1.0
 max_concurrency=1
 
@@ -10,12 +13,13 @@ python benchmark_serving.py \
     --backend vllm \
     --model $model \
     --dataset-name sharegpt \
-    --dataset-path /home/erictsai/vllm-research/research/sharegpt.json \
+    --dataset-path /workspace/vllm/research/sharegpt.json \
     --num-prompts $num_prompts \
     --request-rate "$qps" \
     --max-concurrency $max_concurrency \
     --metric-percentiles "95" \
-    --port 8000
+    --port 8000 \
+    --host vllm-proxy
 
 
 # results_folder="/home/erictsai/vllm-test/benchmark_result"

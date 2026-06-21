@@ -4,23 +4,23 @@ import numpy as np
 plt.rcParams.update({'font.size': 20.5}) 
 
 n_values = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
-ttft_values = [160, 143, 160, 168, 180, 191]
+ttft_values = [107.39, 96.53, 105.86, 120.93, 134.98, 142.34]
 
 # n_values = [1.0, 0.75, 0.6, 0.4, 0.2, 0.0]
-# ttft_values = [157, 141, 143, 148, 152, 157]
+# ttft_values = [105.75, 93, 97.54, 104, 110.85, 115.36]
 
 data = sorted(zip(n_values, ttft_values))
 n_sorted = [x[0] for x in data]
 ttft_sorted = [x[1] for x in data]
 
-F = 40
-T = 120
+F = 24
+T = 75
+
+# X = 3
 X = 5
-# X = 4
 
 
-# ttft_at_1 = 157
-ttft_at_1 = 160
+ttft_at_1 = ttft_values[0]
 S = ttft_at_1 - (F + T)
 print(f"Calculated S: {S}") 
 

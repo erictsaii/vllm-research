@@ -4,8 +4,8 @@ import numpy as np
 plt.rcParams.update({'font.size': 14}) 
 
 n_values = np.array([100, 300, 500, 700, 900, 1100, 1300, 1500])
-T_values = np.array([0.088, 0.155, 0.210, 0.271, 0.338, 0.398, 0.469, 0.528])
-F_values = np.array([0.048, 0.05, 0.05, 0.05, 0.052, 0.053, 0.056, 0.061])
+T_values = np.array([0.022, 0.032, 0.046, 0.058, 0.074, 0.086, 0.102, 0.114])
+F_values = np.array([0.010, 0.011, 0.011, 0.013, 0.016, 0.016, 0.018, 0.019])
 
 X_scenarios = [3, 4, 5]
 
@@ -39,17 +39,18 @@ for i, X in enumerate(X_scenarios):
         cross_y = np.interp(cross_n, n_values, T_values)
         
         ax.axvline(x=cross_n, color='k', linestyle=':', alpha=0.7)
-        ax.annotate(f'length ≈ {cross_n:.0f}', 
-                    xy=(cross_n, cross_y), 
-                    xytext=(cross_n + 100, cross_y - 0.1),
-                    arrowprops=dict(facecolor='black', shrink=0.05))
-        
-    #   ax.set_title(f'Scenario X = {X}\nCondition holds until n ≈ {int(cross_n)}')
-    # else:
-    #     if T_values[0] <= XF_values[0]:
-    #          ax.set_title(f'Scenario X = {X}\nAlways Valid in range')
-    #     else:
-    #          ax.set_title(f'Scenario X = {X}\nNever Valid in range')
+        ax.annotate(
+            f'length ≈ {cross_n:.0f}',
+            xy=(cross_n, cross_y),
+            xytext=(15, -50),              # 相對偏移：右 20 pt、下 15 pt
+            textcoords='offset points',
+            arrowprops=dict(
+                arrowstyle='simple',
+                fc='black',
+                ec='black',
+                mutation_scale=10
+            )
+        )
 
     ax.set_xlabel('Input Length')
     ax.set_ylabel('Time (s)')

@@ -1,0 +1,47 @@
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Taipei
+
+# Basic tools
+RUN apt-get update && apt-get install -y \
+    git curl wget vim nano \
+    build-essential ccache ninja-build pkg-config \
+    python3.10 python3.10-dev python3-pip python3.10-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# Helpful build env
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=/usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
+# Optional: speed up rebuilds
+ENV CCACHE_DIR=/root/.cache/ccache
+ENV CCACHE_MAXSIZE=20G
+
+WORKDIR /workspace/vllm
+
+# 1) Install PyTorch FIRST, manually, with CUDA 12.8
+RUN pip install \
+    torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 \
+    --index-url https://download.pytorch.org/whl/cu128
+
+# Common Python deps that often help during build/runtime
+RUN pip install \
+    cmake \
+    packaging \
+    setuptools-scm \
+    numpy \
+    scipy \
+    ninja \
+    psutil \
+    sentencepiece \
+    transformers \
+    huggingface_hub
+
+# We do NOT copy source here.
+# Source will be bind-mounted from host for editable development.
+CMD ["/bin/bash"]

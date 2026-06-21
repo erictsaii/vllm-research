@@ -49,14 +49,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--url", 
         type=str, 
-        default="http://127.0.0.1:8000/v1/completions", 
+        default="http://vllm-proxy:8000/v1/completions", 
         help="Target API URL."
     )
 
     args = parser.parse_args()
 
     # MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
-    MODEL_NAME = "meta-llama/Llama-2-7b-hf"
-
+    # MODEL_NAME = "meta-llama/Llama-2-7b-hf"
+    MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
 
     send_completion_request(args.length, MODEL_NAME, args.url)

@@ -6,12 +6,17 @@ plt.rcParams.update({'font.size': 15})
 
 
 X = 5
-categories = ["B=1000", "B=800", "B=600"]
-# original = np.array([285, 321, 400])
-# optimal = np.array([245, 200, 188])
 
-original = np.array([741, 741, 741])
-optimal = np.array([600, 540, 489])
+categories = ["B=5", "B=4", "B=3"]
+original = np.array([76 , 87.66, 100.8])
+optimal = np.array([66 , 53.63, 42.24])
+
+# categories = ["B=5", "B=4", "B=3"]
+# original = np.array([244.35 , 280, 342.45])
+# optimal = np.array([212 , 184.01, 150])
+
+# original = np.array([741, 741, 741])
+# optimal = np.array([600, 540, 489])
 
 orig_norm = np.ones_like(original, dtype=float)  # baseline 1.0
 opt_norm = optimal / original

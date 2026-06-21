@@ -4,8 +4,8 @@ import numpy as np
 plt.rcParams.update({'font.size': 15}) 
 
 categories = ["X=3", "X=4", "X=5"]
-original = np.array([285, 285, 285])
-optimal = np.array([130, 172.6, 245])
+original = np.array([244.35, 244.35, 244.35])
+optimal = np.array([112.93, 160, 212])
 
 # original = np.array([741, 741, 741])
 # optimal = np.array([480, 550, 600])
