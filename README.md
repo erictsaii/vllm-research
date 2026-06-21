@@ -1,4 +1,4 @@
-# NIKA on vLLM Research Fork
+# NIKA: Optimal KV Cache Transfer for Minimizing the Latency of Disaggregated LLM Inference
 
 This repository is a vLLM-based research fork for the paper:
 
