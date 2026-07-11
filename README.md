@@ -54,23 +54,7 @@ docker run --rm -it \
   bash
 ```
 
-### 4. Start decode container (GPU 1)
-
-```bash
-docker run --rm -it \
-  --name vllm-decode \
-  --network vllm-pd-net \
-  --device nvidia.com/gpu=1 \
-  --ipc=host \
-  -p 8200:8200 \
-  -v ~/.cache/huggingface:/root/.cache/huggingface \
-  -v ~/vllm-research:/workspace/vllm \
-  -e NCCL_SOCKET_IFNAME=eth0 \
-  erictsai90/myvllm:5090 \
-  bash
-```
-
-### 5. Start prefill container (GPU 0)
+### 4. Start prefill container (GPU 0)
 
 ```bash
 docker run --rm -it \
@@ -86,6 +70,23 @@ docker run --rm -it \
   erictsai90/myvllm:5090 \
   bash
 ```
+
+### 5. Start decode container (GPU 1)
+
+```bash
+docker run --rm -it \
+  --name vllm-decode \
+  --network vllm-pd-net \
+  --device nvidia.com/gpu=1 \
+  --ipc=host \
+  -p 8200:8200 \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  -v ~/vllm-research:/workspace/vllm \
+  -e NCCL_SOCKET_IFNAME=eth0 \
+  erictsai90/myvllm:5090 \
+  bash
+```
+
 
 ### 6. Start benchmark/client container (optional)
 
@@ -147,6 +148,6 @@ In `vllm-benchmark` container:
 
 ```bash
 cd /workspace/vllm/benchmarks/disagg_benchmarks
-bash disagg_performance_benchmark.sh
+bash ~/vllm-research/research/scripts/performance_benchmark.sh
 ```
 
